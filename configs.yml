@@ -1,0 +1,74 @@
+- name: Preconfig
+  hosts: demo
+  tasks:
+    - name: Docker installation
+      - block:
+        - name: Adding universe
+          apt_repository:
+            repo: "deb http://us.archive.ubuntu.com/ubuntu/ {{ ansible_distibution_release }} universe"
+            state: present
+
+        - name: Installing additional packages
+          apt:
+            name:
+              - apt_transport_https
+              - curl
+              - ca-certificate
+              - gnupg
+              - lsb-release
+            update_cache: true
+            cache_valid_time: 86400
+
+          - name: Adding key docker
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+
+        - name: Installing stable rep
+          apt_repository:
+            repo: >
+              deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg]
+              http://us.archive.ubuntu.com/ubuntu
+              {{ ansible_distribution_release }} stable
+            update-cache: true
+            state: present
+            filename: docker
+
+        - name: Installing Docker-ce
+          apt:
+            name: docker-ce
+            update_cache: true
+
+        - name: Checking if docker is installed and reloaded
+          service:
+            name: docker
+            state: restarted
+            enabled: true
+      become: true
+
+    - name: Docker-compose installation
+      - block:
+        - name: Getting last version docker-compose
+          uri:
+            url: "https://api.github.com/repos/docker/compose/releases/latest"
+            body_format: json
+          register: page
+
+        - name: Installing last version docker-compose
+          get_url:
+            url: "https://github.com/docker/compose/releases/download/{{ page.json.tag_name }}/docker-compose-linux-x86_64"
+            dest: /usr/local/bin/docker-compose
+            mode: 0755
+      become: true
+
+    - name: Finishing installation
+      - block:
+        - name: Adding user to Docker group
+          user:
+            name: "{{ ansible_user }}"
+            group: docker
+            append: yes
+
+        - name: Rebooting server
+          reboot:
+          msg: All is done
+      become: true
